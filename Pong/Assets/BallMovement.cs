@@ -1,7 +1,6 @@
+﻿using UnityEngine;
 
-using UnityEngine;
-
-public class BallMovement : MonoBehaviour
+public class BallMovement : MonoBehaviour, ICollidable
 {
     public float speed = 6f;
     public float launchDelay = 1f;
@@ -22,7 +21,6 @@ public class BallMovement : MonoBehaviour
         rb.linearVelocity = new Vector2(x, y).normalized * speed;
     }
 
- 
     public void ResetBall()
     {
         rb.linearVelocity = Vector2.zero;
@@ -39,6 +37,17 @@ public class BallMovement : MonoBehaviour
 
     void OnCollisionEnter2D(Collision2D collision)
     {
+        ICollidable collidable = collision.gameObject.GetComponent<ICollidable>();
+        if (collidable != null)
+        {
+            collidable.OnHit(collision);
+        }
+
         rb.linearVelocity = rb.linearVelocity.normalized * speed;
+    }
+
+    public void OnHit(Collision2D collision)
+    {
+        rb.linearVelocity = -rb.linearVelocity;
     }
 }
