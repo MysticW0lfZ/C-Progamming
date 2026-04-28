@@ -1,20 +1,33 @@
-﻿using UnityEngine;
+﻿using Unity.Netcode;
+using UnityEngine;
 
-public class BallMovement : MonoBehaviour, ICollidable
+public class BallMovement : NetworkBehaviour, ICollidable
 {
     public float speed = 6f;
     public float launchDelay = 1f;
 
     private Rigidbody2D rb;
 
-    void Start()
+    void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        RestartRound();
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        rb = GetComponent<Rigidbody2D>(); // ensure reference
+
+        // Only SERVER controls ball
+        if (IsServer)
+        {
+            RestartRound();
+        }
     }
 
     void Launch()
     {
+        if (!IsServer) return;
+
         float x = UnityEngine.Random.value < 0.5f ? -1f : 1f;
         float y = UnityEngine.Random.Range(-0.6f, 0.6f);
 
@@ -23,6 +36,9 @@ public class BallMovement : MonoBehaviour, ICollidable
 
     public void ResetBall()
     {
+        if (!IsServer) return;
+        if (rb == null) return;
+
         rb.linearVelocity = Vector2.zero;
         rb.angularVelocity = 0f;
         transform.position = Vector2.zero;
@@ -30,6 +46,9 @@ public class BallMovement : MonoBehaviour, ICollidable
 
     public void RestartRound()
     {
+        if (!IsServer) return;
+        if (rb == null) return;
+
         ResetBall();
         CancelInvoke(nameof(Launch));
         Invoke(nameof(Launch), launchDelay);
@@ -37,6 +56,8 @@ public class BallMovement : MonoBehaviour, ICollidable
 
     void OnCollisionEnter2D(Collision2D collision)
     {
+        if (!IsServer) return;
+
         ICollidable collidable = collision.gameObject.GetComponent<ICollidable>();
         if (collidable != null)
         {
@@ -48,6 +69,8 @@ public class BallMovement : MonoBehaviour, ICollidable
 
     public void OnHit(Collision2D collision)
     {
+        if (!IsServer) return;
+
         rb.linearVelocity = -rb.linearVelocity;
     }
 }

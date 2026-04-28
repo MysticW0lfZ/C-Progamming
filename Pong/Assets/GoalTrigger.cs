@@ -1,4 +1,5 @@
-using UnityEngine;
+﻿using UnityEngine;
+using Unity.Netcode;
 
 public class GoalTrigger : MonoBehaviour
 {
@@ -9,13 +10,23 @@ public class GoalTrigger : MonoBehaviour
     {
         if (!other.CompareTag("Ball")) return;
 
+        if (!NetworkManager.Singleton.IsServer) return;
+
+        if (gameManager == null)
+        {
+            gameManager = GameManager.Instance;
+        }
+
+        //  FIXED LOGIC
         if (isLeftGoal)
         {
-            gameManager.ScoreLeftPlayer();   // Left goal gives left player point
+            // Ball hit LEFT → RIGHT player scores
+            gameManager.ScoreRightPlayer();
         }
         else
         {
-            gameManager.ScoreRightPlayer();  // Right goal gives right player point
+            // Ball hit RIGHT → LEFT player scores
+            gameManager.ScoreLeftPlayer();
         }
     }
 }

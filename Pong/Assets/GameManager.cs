@@ -1,8 +1,11 @@
+using Unity.Netcode;
 using UnityEngine;
 using TMPro;
 
-public class GameManager : MonoBehaviour
+public class GameManager : NetworkBehaviour
 {
+    public static GameManager Instance;
+
     public int maxScore = 5;
 
     public TMP_Text leftScoreText;
@@ -13,91 +16,157 @@ public class GameManager : MonoBehaviour
 
     public BallMovement ball;
 
-    private int leftScore;
-    private int rightScore;
     private bool gameOver;
 
-    void Start()
+    public NetworkVariable<int> leftScore = new NetworkVariable<int>(
+        0,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public NetworkVariable<int> rightScore = new NetworkVariable<int>(
+        0,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    void Awake()
     {
-        gameOver = false;
+        Instance = this;
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        leftScore.OnValueChanged += OnScoreChanged;
+        rightScore.OnValueChanged += OnScoreChanged;
 
         if (winPanel != null) winPanel.SetActive(false);
         if (winText != null) winText.text = "";
 
-        if (ball == null)
-        {
-            GameObject ballObj = GameObject.FindGameObjectWithTag("Ball");
-            if (ballObj != null) ball = ballObj.GetComponent<BallMovement>();
-        }
-
+        FindBall();
         UpdateUI();
 
-        if (ball != null) ball.RestartRound();
+        if (IsServer && ball != null)
+        {
+            ball.RestartRound();
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        leftScore.OnValueChanged -= OnScoreChanged;
+        rightScore.OnValueChanged -= OnScoreChanged;
+    }
+
+    void OnScoreChanged(int oldValue, int newValue)
+    {
+        UpdateUI();
+    }
+
+    void FindBall()
+    {
+        if (ball != null) return;
+
+        GameObject ballObj = GameObject.FindGameObjectWithTag("Ball");
+
+        if (ballObj != null)
+        {
+            ball = ballObj.GetComponent<BallMovement>();
+        }
     }
 
     public void ScoreLeftPlayer()
     {
-        if (gameOver) return;
+        if (!IsServer || gameOver) return;
 
-        leftScore += 1;
+        leftScore.Value++;
         UpdateUI();
 
-        if (leftScore >= maxScore)
+        if (leftScore.Value >= maxScore)
         {
-            EndGame("Player 2 (right side) wins");
+            EndGameClientRpc(true);
             return;
         }
 
+        FindBall();
         if (ball != null) ball.RestartRound();
     }
 
     public void ScoreRightPlayer()
     {
-        if (gameOver) return;
+        if (!IsServer || gameOver) return;
 
-        rightScore += 1;
+        rightScore.Value++;
         UpdateUI();
 
-        if (rightScore >= maxScore)
+        if (rightScore.Value >= maxScore)
         {
-            EndGame("Player 1 (left side) wins");
+            EndGameClientRpc(false);
             return;
         }
 
+        FindBall();
         if (ball != null) ball.RestartRound();
     }
 
-    void EndGame(string message)
+    [ClientRpc]
+    void EndGameClientRpc(bool leftPlayerWon)
     {
         gameOver = true;
 
+        if (leftPlayerWon)
+        {
+            ShowWin("Player 1 (left side) wins");
+        }
+        else
+        {
+            ShowWin("Player 2 (right side) wins");
+        }
+    }
+
+    void ShowWin(string message)
+    {
         if (winText != null) winText.text = message;
         if (winPanel != null) winPanel.SetActive(true);
 
-        if (ball != null) ball.ResetBall();
-
-        Time.timeScale = 0f;
+        if (IsServer)
+        {
+            FindBall();
+            if (ball != null) ball.ResetBall();
+        }
     }
 
     public void RestartGame()
     {
-        Time.timeScale = 1f;
+        if (!IsServer) return;
 
-        leftScore = 0;
-        rightScore = 0;
+        leftScore.Value = 0;
+        rightScore.Value = 0;
+        gameOver = false;
+
+        RestartClientRpc();
+
+        FindBall();
+        if (ball != null) ball.RestartRound();
+    }
+
+    [ClientRpc]
+    void RestartClientRpc()
+    {
         gameOver = false;
 
         if (winPanel != null) winPanel.SetActive(false);
         if (winText != null) winText.text = "";
 
         UpdateUI();
-
-        if (ball != null) ball.RestartRound();
     }
 
     void UpdateUI()
     {
-        if (leftScoreText != null) leftScoreText.text = leftScore.ToString();
-        if (rightScoreText != null) rightScoreText.text = rightScore.ToString();
+        if (leftScoreText != null)
+            leftScoreText.text = leftScore.Value.ToString();
+
+        if (rightScoreText != null)
+            rightScoreText.text = rightScore.Value.ToString();
     }
 }

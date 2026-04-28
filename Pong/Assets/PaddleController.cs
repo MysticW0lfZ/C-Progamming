@@ -1,26 +1,44 @@
+using Unity.Netcode;
 using UnityEngine;
 
-public abstract class PaddleController : MonoBehaviour, ICollidable
+public abstract class PaddleController : NetworkBehaviour
 {
     public float speed = 8f;
-    protected Rigidbody2D rb;
+    public float yLimit = 4.2f;
 
-    protected virtual void Start()
-    {
-        rb = GetComponent<Rigidbody2D>();
-    }
-
-    protected virtual void FixedUpdate()
-    {
-        float input = GetMovementInput();
-        rb.linearVelocity = new Vector2(0, input * speed);
-    }
+    protected NetworkVariable<float> syncedY =
+        new NetworkVariable<float>(
+            0f,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Owner
+        );
 
     protected abstract float GetMovementInput();
 
-    // REQUIRED by ICollidable
-    public void OnHit(Collision2D collision)
+    void Update()
     {
-        // Optional feedback
+        // ONLY OWNER moves
+        if (!IsOwner) return;
+
+        float move = GetMovementInput();
+
+        Vector3 pos = transform.position;
+        pos.y += move * speed * Time.deltaTime;
+        pos.y = Mathf.Clamp(pos.y, -yLimit, yLimit);
+
+        transform.position = pos;
+
+        // Sync Y only
+        syncedY.Value = pos.y;
+    }
+
+    void LateUpdate()
+    {
+        // NON-OWNERS follow Y ONLY (do not touch X)
+        if (IsOwner) return;
+
+        Vector3 pos = transform.position;
+        pos.y = syncedY.Value;
+        transform.position = pos;
     }
 }
